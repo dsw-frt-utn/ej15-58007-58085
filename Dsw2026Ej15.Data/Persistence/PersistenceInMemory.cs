@@ -37,8 +37,7 @@ public class PersistenceInMemory: IPersistence
     public void ActualizarDoctor(Doctor doctor)
     {
         var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
-        if (index >= 0)
-            _listadoDoctores[index] = doctor;
+        if (index >= 0) _listadoDoctores[index] = doctor;
     }
 
 }
