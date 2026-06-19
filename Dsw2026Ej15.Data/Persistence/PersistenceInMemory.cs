@@ -5,7 +5,7 @@ using Dsw2026Ej15.Domain.Entities;
 namespace Dsw2026Ej15.Data.Persistence;
 using Dsw2026Ej15.Domain.Interfaces;
 
-internal class PersistenceInMemory: IPersistence
+public class PersistenceInMemory: IPersistence
 {
     public readonly List<Doctor> _listadoDoctores= new();
     public readonly List<Speciality> _listadoEspecialidades=new();
@@ -34,16 +34,11 @@ internal class PersistenceInMemory: IPersistence
     public IEnumerable<Doctor> ObtenerDoctores() => _listadoDoctores.Where(x => x.IsActive).ToList();
     public Doctor? ObtenerDoctor(Guid id) => _listadoDoctores.FirstOrDefault(x => x.Id == id && x.IsActive);
     public Speciality? ObtenerEspecialidadPorId(Guid id) => _listadoEspecialidades.FirstOrDefault(x => x.Id == id);
-    
-
     public void ActualizarDoctor(Doctor doctor)
     {
         var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
         if (index >= 0)
             _listadoDoctores[index] = doctor;
     }
-
-   
-
 
 }

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Dsw2026Ej15.Domain.Entities;
+using Dsw2026Ej15.Domain.Interfaces;
 
 
 namespace Dsw2026Ej15.Api.Controllers;
