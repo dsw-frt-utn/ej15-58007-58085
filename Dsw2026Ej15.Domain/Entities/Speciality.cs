@@ -6,8 +6,8 @@ namespace Dsw2026Ej15.Domain.Entities
 {
     public class Speciality : BaseEntity
     {
-        public String Name { get; set; }
-        public String Description { get; set; }
+        public String? Name { get; set; }
+        public String? Description { get; set; }
 
         public Speciality() { }
 
