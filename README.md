@@ -2,6 +2,9 @@
 # Ejercicio N° 15
 ## Desarrollo de Software
 
+58007, Carrizo Sanchez Jorge Nazareno, 3K1.
+58085, Mendoza Exequiel Alejandro, 3K2.
+
 1. Clonar el repositorio creado al aceptar la asignación
 2. Crear una rama de larga duración denominada __development__
 3. Desarrollar una API Web basada en controladores en .NET, con las siguientes características:
