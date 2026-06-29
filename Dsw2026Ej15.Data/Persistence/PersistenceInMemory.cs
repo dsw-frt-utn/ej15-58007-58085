@@ -30,11 +30,36 @@ public class PersistenceInMemory: IPersistence
             _listadoEspecialidades.AddRange(especialidades);
     }
 
-    public void AgregarDoctor(Doctor doctor)=> _listadoDoctores.Add(doctor);
-    public IEnumerable<Doctor> ObtenerDoctores() => _listadoDoctores.Where(x => x.IsActive).ToList();
-    public Doctor? ObtenerDoctor(Guid id) => _listadoDoctores.FirstOrDefault(x => x.Id == id && x.IsActive);
-    public Speciality? ObtenerEspecialidadPorId(Guid id) => _listadoEspecialidades.FirstOrDefault(x => x.Id == id);
-    public void ActualizarDoctor(Doctor doctor)
+    //public void AgregarDoctor(Doctor doctor)=> _listadoDoctores.Add(doctor);
+    public async Task AgregarDoctor(Doctor doctor)
+    {
+        _listadoDoctores.Add(doctor);
+    }
+
+    //public IEnumerable<Doctor> ObtenerDoctores() => _listadoDoctores.Where(x => x.IsActive);
+    public async Task<IEnumerable<Doctor?>> ObtenerDoctores()
+    {
+        return _listadoDoctores.Where(x=>x.IsActive);
+    }
+    //public Doctor? ObtenerDoctor(Guid id) => _listadoDoctores.FirstOrDefault(x => x.Id == id && x.IsActive);
+    public async Task<Doctor?> ObtenerDoctor(Guid id)
+    {
+        return _listadoDoctores.SingleOrDefault(x => x.Id == id && x.IsActive);
+    }
+    //public Speciality? ObtenerEspecialidadPorId(Guid id) => _listadoEspecialidades.FirstOrDefault(x => x.Id == id);
+    public async Task<Speciality?> ObtenerEspecialidadPorId(Guid id)
+    {
+        return _listadoEspecialidades.SingleOrDefault(x => x.Id == id);
+    }
+
+    
+    /*public void ActualizarDoctor(Doctor doctor)
+    {
+        var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
+        if (index >= 0) _listadoDoctores[index] = doctor;
+    }*/
+
+    public async Task ActualizarDoctor(Doctor doctor)
     {
         var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
         if (index >= 0) _listadoDoctores[index] = doctor;
