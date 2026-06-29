@@ -80,7 +80,7 @@ public class DoctorsController : ControllerBase
         if (doctor == null)
             return NotFound("El médico no existe o ya no está activo");
 
-        doctor.IsActive = false;
+        doctor.DesactivarMedico();
         await _persistence.ActualizarDoctor(doctor);
         return NoContent();
     }

@@ -1,0 +1,833 @@
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\Program.cs =====  
+using Dsw2026Ej15.Data.Persistence;
+using Dsw2026Ej15.Domain.Interfaces;
+using Dsw2026Ej15.Api.Middlewares;
+using Dsw2026Ej15.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace Dsw2026Ej15.Api;
+
+public class Program
+{
+    public static void Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
+
+        var connectionString = "Data Source=(localdb)\\MSSQLLocalDB;Database=Dsw2026Ej15;Integrated Security=True;Connect Timeout=30;Encrypt=True;Trust Server Certificate=True";
+
+        builder.Services.AddControllers();
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen();
+        builder.Services.AddScoped<IPersistence, PersistenceEf>();
+        //builder.Services.AddSingleton<IPersistence, PersistenceInMemory>();
+        builder.Services.AddDbContext<Dsw2026Ej15DbContext>(options =>
+        {
+            options.UseSqlServer(connectionString);
+        });
+
+        var app = builder.Build();
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
+        app.UseMiddleware<ExceptionMiddleware>();
+
+        app.MapGet("/health-check",()=>"ok");
+        app.UseAuthorization();
+        app.MapControllers();
+
+        app.Run();
+    }
+}===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\WeatherForecast.cs =====  
+namespace Dsw2026Ej15.Api
+{
+    public class WeatherForecast
+    {
+        public DateOnly Date { get; set; }
+
+        public int TemperatureC { get; set; }
+
+        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+
+        public string? Summary { get; set; }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\Controllers\DoctorsController.cs =====  
+Ôªøusing Microsoft.AspNetCore.Mvc;
+using Dsw2026Ej15.Domain.Entities;
+using Dsw2026Ej15.Domain.Interfaces;
+
+namespace Dsw2026Ej15.Api.Controllers;
+
+[ApiController]
+[Route("api/doctors")]
+public class DoctorsController : ControllerBase
+{
+    private readonly IPersistence _persistence;
+
+    public DoctorsController(IPersistence persistence)
+    {
+        _persistence = persistence;
+    }
+
+    [HttpPost]
+    [EndpointSummary("Insertar un nuevo M√©dico")]
+    public async Task<IActionResult> CrearDoctor([FromBody] CrearDoctorRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return BadRequest("El nombre es requerido.");
+        if (string.IsNullOrWhiteSpace(request.LicenseNumber))
+            return BadRequest("El n√∫mero de licencia es requerido.");
+
+        var especialidad = await _persistence.ObtenerEspecialidadPorId(request.SpecialityId);
+        if (especialidad == null)
+            return BadRequest("La especialidad no existe.");
+
+        var doctor = new Doctor
+        {
+            Id = Guid.NewGuid(),
+            Name = request.Name,
+            LicenseNumber = request.LicenseNumber,
+            IsActive = true,
+            Speciality = especialidad
+        };
+
+        await _persistence.AgregarDoctor(doctor);
+        return StatusCode(201);
+    }
+
+    public class CrearDoctorRequest
+    {
+        public required string Name { get; set; }
+        public required string LicenseNumber { get; set; }
+        public Guid SpecialityId { get; set; }
+    }
+
+    [HttpGet]
+    [EndpointSummary("Obtener todos los m√©dicos activos")]
+    public async Task<IActionResult> ObtenerDoctores()
+    {
+        var doctores = await _persistence.ObtenerDoctores();
+        return Ok(doctores);
+    }
+
+    [HttpGet("{id}")]
+    [EndpointSummary("Obtener un m√©dico activo a partir de su Id")]
+    public async Task<IActionResult> ObtenerDoctor(Guid id)
+    {
+        var doctor = await _persistence.ObtenerDoctor(id);
+        if (doctor == null)
+            return NotFound("El m√©dico no existe o no est√° activo.");
+
+        return Ok(new
+        {
+            doctor.Name,
+            doctor.LicenseNumber,
+            SpecialityName = doctor.Speciality.Name
+        });
+    }
+
+    [HttpDelete("{id}")]
+    [EndpointSummary("Establecer como inactivo al m√©dico")]
+    public async Task<IActionResult> EliminarDoctor(Guid id)
+    {
+        var doctor = await _persistence.ObtenerDoctor(id);
+        if (doctor == null)
+            return NotFound("El m√©dico no existe o ya no est√° activo");
+
+        doctor.DesactivarMedico();
+        await _persistence.ActualizarDoctor(doctor);
+        return NoContent();
+    }
+}===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\Controllers\WeatherForecastController.cs =====  
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dsw2026Ej15.Api.Controllers
+{
+    [ApiController]
+    [Route("[controller]")]
+    public class WeatherForecastController : ControllerBase
+    {
+        private static readonly string[] Summaries =
+        [
+            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+        ];
+
+        [HttpGet(Name = "GetWeatherForecast")]
+        public IEnumerable<WeatherForecast> Get()
+        {
+            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
+            {
+                Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                TemperatureC = Random.Shared.Next(-20, 55),
+                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
+            })
+            .ToArray();
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\Middlewares\ExceptionMiddleware.cs =====  
+Ôªønamespace Dsw2026Ej15.Api.Middlewares;
+using Dsw2026Ej15.Domain.Exceptions;
+public class ExceptionMiddleware
+{
+    private readonly RequestDelegate _next;
+    public ExceptionMiddleware(RequestDelegate next)
+    {
+        _next= next;
+    }
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (ValidationException ex)
+        {
+            context.Response.StatusCode = 400;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { error = "Error interno del servidor.", detail = ex.Message });
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\obj\Debug\net10.0\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs =====  
+// <autogenerated />
+using System;
+using System.Reflection;
+[assembly: global::System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v10.0", FrameworkDisplayName = ".NET 10.0")]
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\obj\Debug\net10.0\Dsw2026Ej15.Api.AssemblyInfo.cs =====  
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     Este c√≥digo fue generado por una herramienta.
+//     Versi√≥n de runtime:4.0.30319.42000
+//
+//     Los cambios en este archivo podr√≠an causar un comportamiento incorrecto y se perder√°n si
+//     se vuelve a generar el c√≥digo.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+using System;
+using System.Reflection;
+
+[assembly: System.Reflection.AssemblyCompanyAttribute("Dsw2026Ej15.Api")]
+[assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e7e05f61b1eaa2f88be9f53e430aad13acd8527a")]
+[assembly: System.Reflection.AssemblyProductAttribute("Dsw2026Ej15.Api")]
+[assembly: System.Reflection.AssemblyTitleAttribute("Dsw2026Ej15.Api")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+
+// Generated by the MSBuild WriteCodeFragment class.
+
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\obj\Debug\net10.0\Dsw2026Ej15.Api.GlobalUsings.g.cs =====  
+// <auto-generated/>
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.Hosting;
+global using Microsoft.AspNetCore.Http;
+global using Microsoft.AspNetCore.Routing;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Extensions.Logging;
+global using System;
+global using System.Collections.Generic;
+global using System.IO;
+global using System.Linq;
+global using System.Net.Http;
+global using System.Net.Http.Json;
+global using System.Threading;
+global using System.Threading.Tasks;
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Api\obj\Debug\net10.0\Dsw2026Ej15.Api.MvcApplicationPartsAssemblyInfo.cs =====  
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     Este c√≥digo fue generado por una herramienta.
+//     Versi√≥n de runtime:4.0.30319.42000
+//
+//     Los cambios en este archivo podr√≠an causar un comportamiento incorrecto y se perder√°n si
+//     se vuelve a generar el c√≥digo.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+using System;
+using System.Reflection;
+
+[assembly: Microsoft.AspNetCore.Mvc.ApplicationParts.ApplicationPartAttribute("Microsoft.AspNetCore.OpenApi")]
+[assembly: Microsoft.AspNetCore.Mvc.ApplicationParts.ApplicationPartAttribute("Swashbuckle.AspNetCore.SwaggerGen")]
+
+// Generated by the MSBuild WriteCodeFragment class.
+
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\Dsw2026Ej15DbContext.cs =====  
+Ôªøusing Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using Dsw2026Ej15.Domain.Entities;
+
+namespace Dsw2026Ej15.Data
+{
+    public class Dsw2026Ej15DbContext : DbContext
+    {
+        public DbSet<Doctor> Doctors { get; set; }
+        public DbSet<Speciality> Specialities { get; set; }
+
+        public Dsw2026Ej15DbContext(DbContextOptions<Dsw2026Ej15DbContext> options) : base(options)
+        {
+
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Doctor>(e =>
+            {
+                e.ToTable("Doctors");
+                e.Property(e => e.Name).HasMaxLength(100).IsRequired();
+                e.Property(e => e.LicenseNumber).HasMaxLength(100).IsRequired();
+            });
+
+            modelBuilder.Entity<Speciality>(e =>
+            {
+                e.ToTable("Specialities");
+                e.Property(e => e.Name).HasMaxLength(100).IsRequired();
+                e.Property(e => e.Description).HasMaxLength(300).IsRequired();
+            });
+        }
+
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\PersistenceEf.cs =====  
+Ôªøusing Dsw2026Ej15.Domain.Entities;
+using Dsw2026Ej15.Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Ej15.Data
+{
+    public class PersistenceEf : IPersistence
+    {
+        private readonly Dsw2026Ej15DbContext _context;
+        public PersistenceEf(Dsw2026Ej15DbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task ActualizarDoctor(Doctor doctor)
+        {
+            _context.Doctors.Update(doctor);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task AgregarDoctor(Doctor doctor)
+        {
+            _context.Doctors.Add(doctor);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<Doctor?> ObtenerDoctor(Guid id)
+        {
+            return await _context.Doctors.SingleOrDefaultAsync(x=>x.Id == id&&x.IsActive);
+        }
+
+        public async Task<IEnumerable<Doctor?>> ObtenerDoctores()
+        {
+            return await _context.Doctors.Where(x => x.IsActive).ToListAsync();
+        }
+
+        public async Task<Speciality?> ObtenerEspecialidadPorId(Guid id)
+        {
+            return await _context.Specialities.SingleOrDefaultAsync(x => x.Id == id);
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\Migrations\20260629043715_InitialModel.cs =====  
+Ôªøusing System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Dsw2026Ej15.Data.Migrations
+{
+    /// <inheritdoc />
+    public partial class InitialModel : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "Specialities",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Specialities", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Doctors",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    LicenseNumber = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    SpecialityId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Doctors", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Doctors_Specialities_SpecialityId",
+                        column: x => x.SpecialityId,
+                        principalTable: "Specialities",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Doctors_SpecialityId",
+                table: "Doctors",
+                column: "SpecialityId");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "Doctors");
+
+            migrationBuilder.DropTable(
+                name: "Specialities");
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\Migrations\20260629043715_InitialModel.Designer.cs =====  
+Ôªø// <auto-generated />
+using System;
+using Dsw2026Ej15.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Ej15.Data.Migrations
+{
+    [DbContext(typeof(Dsw2026Ej15DbContext))]
+    [Migration("20260629043715_InitialModel")]
+    partial class InitialModel
+    {
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Dsw2026Ej15.Domain.Entities.Doctor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("SpecialityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecialityId");
+
+                    b.ToTable("Doctors", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Ej15.Domain.Entities.Speciality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Specialities", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Ej15.Domain.Entities.Doctor", b =>
+                {
+                    b.HasOne("Dsw2026Ej15.Domain.Entities.Speciality", "Speciality")
+                        .WithMany()
+                        .HasForeignKey("SpecialityId");
+
+                    b.Navigation("Speciality");
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\Migrations\Dsw2026Ej15DbContextModelSnapshot.cs =====  
+Ôªø// <auto-generated />
+using System;
+using Dsw2026Ej15.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Ej15.Data.Migrations
+{
+    [DbContext(typeof(Dsw2026Ej15DbContext))]
+    partial class Dsw2026Ej15DbContextModelSnapshot : ModelSnapshot
+    {
+        protected override void BuildModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Dsw2026Ej15.Domain.Entities.Doctor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("SpecialityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecialityId");
+
+                    b.ToTable("Doctors", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Ej15.Domain.Entities.Speciality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Specialities", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Ej15.Domain.Entities.Doctor", b =>
+                {
+                    b.HasOne("Dsw2026Ej15.Domain.Entities.Speciality", "Speciality")
+                        .WithMany()
+                        .HasForeignKey("SpecialityId");
+
+                    b.Navigation("Speciality");
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\obj\Debug\net10.0\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs =====  
+// <autogenerated />
+using System;
+using System.Reflection;
+[assembly: global::System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v10.0", FrameworkDisplayName = ".NET 10.0")]
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\obj\Debug\net10.0\Dsw2026Ej15.Data.AssemblyInfo.cs =====  
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     Este c√≥digo fue generado por una herramienta.
+//     Versi√≥n de runtime:4.0.30319.42000
+//
+//     Los cambios en este archivo podr√≠an causar un comportamiento incorrecto y se perder√°n si
+//     se vuelve a generar el c√≥digo.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+using System;
+using System.Reflection;
+
+[assembly: System.Reflection.AssemblyCompanyAttribute("Dsw2026Ej15.Data")]
+[assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e7e05f61b1eaa2f88be9f53e430aad13acd8527a")]
+[assembly: System.Reflection.AssemblyProductAttribute("Dsw2026Ej15.Data")]
+[assembly: System.Reflection.AssemblyTitleAttribute("Dsw2026Ej15.Data")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+
+// Generated by the MSBuild WriteCodeFragment class.
+
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\obj\Debug\net10.0\Dsw2026Ej15.Data.GlobalUsings.g.cs =====  
+// <auto-generated/>
+global using System;
+global using System.Collections.Generic;
+global using System.IO;
+global using System.Linq;
+global using System.Net.Http;
+global using System.Threading;
+global using System.Threading.Tasks;
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Data\Persistence\PersistenceInMemory.cs =====  
+Ôªøusing System;
+using System.Collections.Generic;
+using System.Text.Json;
+using Dsw2026Ej15.Domain.Entities;
+namespace Dsw2026Ej15.Data.Persistence;
+using Dsw2026Ej15.Domain.Interfaces;
+
+public class PersistenceInMemory: IPersistence
+{
+    public readonly List<Doctor> _listadoDoctores= new();
+    public readonly List<Speciality> _listadoEspecialidades=new();
+
+    public PersistenceInMemory()
+    {
+        LoadSpecialities();
+    }
+
+    private void LoadSpecialities()
+    {
+        string jsonPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "specialities.json");
+
+        if (!File.Exists(jsonPath)) return;
+
+        string json = File.ReadAllText(jsonPath);
+        var especialidades = JsonSerializer.Deserialize<List<Speciality>>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        if (especialidades != null)
+            _listadoEspecialidades.AddRange(especialidades);
+    }
+
+    //public void AgregarDoctor(Doctor doctor)=> _listadoDoctores.Add(doctor);
+    public async Task AgregarDoctor(Doctor doctor)
+    {
+        _listadoDoctores.Add(doctor);
+    }
+
+    //public IEnumerable<Doctor> ObtenerDoctores() => _listadoDoctores.Where(x => x.IsActive);
+    public async Task<IEnumerable<Doctor?>> ObtenerDoctores()
+    {
+        return _listadoDoctores.Where(x=>x.IsActive);
+    }
+    //public Doctor? ObtenerDoctor(Guid id) => _listadoDoctores.FirstOrDefault(x => x.Id == id && x.IsActive);
+    public async Task<Doctor?> ObtenerDoctor(Guid id)
+    {
+        return _listadoDoctores.SingleOrDefault(x => x.Id == id && x.IsActive);
+    }
+    //public Speciality? ObtenerEspecialidadPorId(Guid id) => _listadoEspecialidades.FirstOrDefault(x => x.Id == id);
+    public async Task<Speciality?> ObtenerEspecialidadPorId(Guid id)
+    {
+        return _listadoEspecialidades.SingleOrDefault(x => x.Id == id);
+    }
+
+    
+    /*public void ActualizarDoctor(Doctor doctor)
+    {
+        var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
+        if (index >= 0) _listadoDoctores[index] = doctor;
+    }*/
+
+    public async Task ActualizarDoctor(Doctor doctor)
+    {
+        _listadoDoctores.Remove(doctor);
+        _listadoDoctores.Add(doctor);
+        /*var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
+        if (index >= 0) _listadoDoctores[index] = doctor;*/
+    }
+
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\Entities\BaseEntity.cs =====  
+Ôªøusing System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Ej15.Domain.Entities
+{
+    public abstract class BaseEntity
+    {
+        public Guid Id { get; init; }
+
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\Entities\Doctor.cs =====  
+Ôªøusing System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text;
+
+namespace Dsw2026Ej15.Domain.Entities
+{
+    public class Doctor:BaseEntity
+    {
+        public String Name { get; set; }
+        public String LicenseNumber { get; init; }
+        public bool IsActive { get; set; }
+        public Guid? SpecialityId { get; set; }
+        public Speciality? Speciality { get; set; }
+
+        public void DesactivarMedico()
+        {
+            IsActive = false;
+        }
+
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\Entities\Speciality.cs =====  
+Ôªøusing System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Ej15.Domain.Entities
+{
+    public class Speciality : BaseEntity
+    {
+        public String? Name { get; set; }
+        public String? Description { get; set; }
+
+        public Speciality() { }
+
+        public Speciality(String name, String description)
+        {
+            Name = name;
+            Description = description;
+        }
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\Exceptions\ValidationException.cs =====  
+Ôªøusing System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Ej15.Domain.Exceptions;
+
+public class ValidationException : Exception
+{
+    public ValidationException(string message) : base(message) { }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\Interfaces\IPersistence.cs =====  
+Ôªøusing Dsw2026Ej15.Domain.Entities;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Ej15.Domain.Interfaces
+{
+    public  interface IPersistence
+    {
+        Task AgregarDoctor(Doctor doctor);
+        Task<IEnumerable<Doctor?>> ObtenerDoctores();
+        Task<Doctor?> ObtenerDoctor(Guid id);
+        Task ActualizarDoctor(Doctor doctor);
+        Task<Speciality?> ObtenerEspecialidadPorId(Guid id);
+
+        /*void AgregarDoctor(Doctor doctor);
+        IEnumerable<Doctor> ObtenerDoctores();
+        Doctor? ObtenerDoctor(Guid id);
+        void ActualizarDoctor(Doctor doctor);
+        Speciality? ObtenerEspecialidadPorId(Guid id);*/
+    }
+}
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\obj\Debug\net10.0\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs =====  
+// <autogenerated />
+using System;
+using System.Reflection;
+[assembly: global::System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v10.0", FrameworkDisplayName = ".NET 10.0")]
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\obj\Debug\net10.0\Dsw2026Ej15.Domain.AssemblyInfo.cs =====  
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     Este c√≥digo fue generado por una herramienta.
+//     Versi√≥n de runtime:4.0.30319.42000
+//
+//     Los cambios en este archivo podr√≠an causar un comportamiento incorrecto y se perder√°n si
+//     se vuelve a generar el c√≥digo.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+using System;
+using System.Reflection;
+
+[assembly: System.Reflection.AssemblyCompanyAttribute("Dsw2026Ej15.Domain")]
+[assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e7e05f61b1eaa2f88be9f53e430aad13acd8527a")]
+[assembly: System.Reflection.AssemblyProductAttribute("Dsw2026Ej15.Domain")]
+[assembly: System.Reflection.AssemblyTitleAttribute("Dsw2026Ej15.Domain")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+
+// Generated by the MSBuild WriteCodeFragment class.
+
+===== C:\Facultad Naza\Tercer A§o\Desarrollo de Software\Ejercicios\EJ16\Ejercicio_16Resolucion\ej15-58007-58085\Dsw2026Ej15.Domain\obj\Debug\net10.0\Dsw2026Ej15.Domain.GlobalUsings.g.cs =====  
+// <auto-generated/>
+global using System;
+global using System.Collections.Generic;
+global using System.IO;
+global using System.Linq;
+global using System.Net.Http;
+global using System.Threading;
+global using System.Threading.Tasks;

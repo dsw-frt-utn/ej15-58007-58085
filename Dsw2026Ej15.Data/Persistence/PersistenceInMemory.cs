@@ -61,8 +61,10 @@ public class PersistenceInMemory: IPersistence
 
     public async Task ActualizarDoctor(Doctor doctor)
     {
-        var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
-        if (index >= 0) _listadoDoctores[index] = doctor;
+        _listadoDoctores.Remove(doctor);
+        _listadoDoctores.Add(doctor);
+        /*var index = _listadoDoctores.FindIndex(x => x.Id == doctor.Id);
+        if (index >= 0) _listadoDoctores[index] = doctor;*/
     }
 
 }
