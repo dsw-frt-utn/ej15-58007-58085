@@ -39,8 +39,8 @@ public class DoctorsController: ControllerBase
 }
     public class CrearDoctorRequest
     {
-        public string Name { get; set; }
-        public string LicenseNumber { get; set; }
+        public required string Name { get; set; }
+        public required string LicenseNumber { get; set; }
         public Guid SpecialityId { get; set; }
     }
     [HttpGet]
